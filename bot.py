@@ -1,11 +1,12 @@
 import os
 import random
 import datetime
-from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.tl.types import ChatBannedRights
 
-load_dotenv()
+# AI مجاني باستخدام HuggingFace GPT2
+from transformers import pipeline
+ai = pipeline("text-generation", model="gpt2")
 
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
@@ -39,6 +40,11 @@ async def mute_handler(event):
     reply = await event.get_reply_message()
     if not reply:
         await event.reply("❌ اعمل Reply على العضو")
+        return
+
+    # منع كتم النفس أو البوت
+    if reply.sender_id == event.sender_id or reply.sender_id == (await bot.get_me()).id:
+        await event.reply("😂 مش ممكن تكتم نفسك أو البوت")
         return
 
     rights = ChatBannedRights(
@@ -135,5 +141,17 @@ async def dice_game(event):
 @bot.on(events.NewMessage(pattern="عملة"))
 async def coin_game(event):
     await event.reply(f"🪙 {random.choice(['رأس','كتابة'])}")
+
+# ================= AI مجاني =================
+@bot.on(events.NewMessage(pattern="^ai "))
+async def ai_reply(event):
+    question = event.raw_text[3:]
+    try:
+        result = ai(question, max_length=50, do_sample=True)
+        answer = result[0]['generated_text']
+        await event.reply(answer)
+    except Exception as e:
+        await event.reply("❌ حصل خطأ في الرد")
+        print(e)
 
 bot.run_until_disconnected()
