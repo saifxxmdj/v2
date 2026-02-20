@@ -1,7 +1,9 @@
 import os
-from telethon import TelegramClient, events
-from telethon.tl.types import MessageEntityUrl
+import random
+import datetime
 from dotenv import load_dotenv
+from telethon import TelegramClient, events
+from telethon.tl.types import ChatBannedRights
 
 load_dotenv()
 
@@ -11,74 +13,127 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 bot = TelegramClient("bot_session", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
+warnings = {}
+points = {}
+
 print("🤖 البوت شغال دلوقتي!")
 
-# 👋 ترحيب العضو الجديد
+# ================= ترحيب =================
 @bot.on(events.ChatAction)
 async def welcome(event):
-    if event.user_added or event.user_joined:
-        await event.reply(f"👋 أهلاً بيك يا {event.user.first_name}! نورت الجروب ✨")
+    if event.user_joined or event.user_added:
+        user = await event.get_user()
+        await event.reply(f"👋 أهلاً يا {user.first_name} نورت الجروب 🔥")
 
-# 🚀 أمر /start
-@bot.on(events.NewMessage(pattern="^/start$"))
-async def start(event):
-    await event.reply("🤖 البوت شغال! جاهز للحماية والألعاب 🚀")
+# ================= ايدي =================
+@bot.on(events.NewMessage(pattern="ايدي"))
+async def myid(event):
+    await event.reply(f"🆔 ايديك: {event.sender_id}")
 
-# 🔇 كتم عن طريق reply
-@bot.on(events.NewMessage(pattern="^/كت$"))
+# ================= كتم =================
+@bot.on(events.NewMessage(pattern="كتم"))
 async def mute_handler(event):
     if not event.is_group:
         return
-    reply = await event.get_reply_message()
-    if not reply:
-        await event.reply("❌ لازم تعمل reply على رسالة العضو!")
-        return
-    await bot.edit_permissions(event.chat_id, reply.sender_id, send_messages=False)
-    await event.reply(f"🔇 {reply.sender.first_name} اتكتم بنجاح!")
 
-# 🚪 طرد عن طريق reply
-@bot.on(events.NewMessage(pattern="^/طرد$"))
-async def kick_handler(event):
-    if not event.is_group:
-        return
     reply = await event.get_reply_message()
     if not reply:
-        await event.reply("❌ لازم تعمل reply على رسالة العضو!")
+        await event.reply("❌ اعمل Reply على العضو")
+        return
+
+    rights = ChatBannedRights(
+        until_date=datetime.timedelta(minutes=10),
+        send_messages=True
+    )
+
+    try:
+        await bot.edit_permissions(event.chat_id, reply.sender_id, rights)
+        await event.reply("🔇 تم كتمه 10 دقايق")
+    except:
+        await event.reply("❌ مش قادر أكتمه")
+
+# ================= فك كتم =================
+@bot.on(events.NewMessage(pattern="فك"))
+async def unmute(event):
+    reply = await event.get_reply_message()
+    if not reply:
+        return
+
+    rights = ChatBannedRights(until_date=None)
+    await bot.edit_permissions(event.chat_id, reply.sender_id, rights)
+    await event.reply("✅ تم فك الكتم")
+
+# ================= طرد =================
+@bot.on(events.NewMessage(pattern="طرد"))
+async def kick_handler(event):
+    reply = await event.get_reply_message()
+    if not reply:
         return
     await bot.kick_participant(event.chat_id, reply.sender_id)
-    await event.reply(f"🚪 {reply.sender.first_name} اتطرد من الجروب!")
+    await event.reply("🚪 اتطرد بنجاح")
 
-# 🔗 منع نشر لينكات
+# ================= تحذير =================
+@bot.on(events.NewMessage(pattern="تحذير"))
+async def warn(event):
+    reply = await event.get_reply_message()
+    if not reply:
+        return
+
+    user_id = reply.sender_id
+    warnings[user_id] = warnings.get(user_id, 0) + 1
+
+    if warnings[user_id] >= 3:
+        rights = ChatBannedRights(
+            until_date=datetime.timedelta(minutes=5),
+            send_messages=True
+        )
+        await bot.edit_permissions(event.chat_id, user_id, rights)
+        warnings[user_id] = 0
+        await event.reply("🚫 3 تحذيرات = كتم 5 دقايق")
+    else:
+        await event.reply(f"⚠ تحذير رقم {warnings[user_id]}")
+
+# ================= نقاط =================
+@bot.on(events.NewMessage(pattern="نقاط"))
+async def show_points(event):
+    user_id = event.sender_id
+    pts = points.get(user_id, 0)
+    await event.reply(f"⭐ نقاطك: {pts}")
+
+@bot.on(events.NewMessage)
+async def give_points(event):
+    if event.is_group:
+        user_id = event.sender_id
+        points[user_id] = points.get(user_id, 0) + 1
+
+# ================= منع لينكات =================
 @bot.on(events.NewMessage)
 async def block_links(event):
-    if not event.is_group:
-        return
-    text = event.raw_text
-    if "t.me/" in text or "http" in text:
-        try: 
-            await event.delete()
-            await event.reply("🚫 ممنوع نشر لينكات!")
-        except:
-            pass
+    if event.is_group:
+        text = event.raw_text
+        if "http" in text or "t.me/" in text:
+            try:
+                await event.delete()
+                await event.reply("🚫 ممنوع لينكات")
+            except:
+                pass
 
-# 📢 تاك الكل
-@bot.on(events.NewMessage(pattern="تاك منورين"))
+# ================= تاك الكل =================
+@bot.on(events.NewMessage(pattern="تاك"))
 async def tag_all(event):
-    if not event.is_group:
-        return
     members = await bot.get_participants(event.chat_id)
-    mentions = " ".join([f"@{m.username}" if m.username else f"[{m.first_name}](tg://user?id={m.id})" for m in members])
-    await event.reply(f"📢 منورين يا جماعة:\n{mentions}")
+    text = ""
+    for m in members[:50]:
+        text += f"[{m.first_name}](tg://user?id={m.id}) "
+    await event.reply(text)
 
-# 🎲 ألعاب بسيطة
-@bot.on(events.NewMessage(pattern="!زهر"))
+# ================= ألعاب =================
+@bot.on(events.NewMessage(pattern="زهر"))
 async def dice_game(event):
-    await event.reply(f"🎲 زهر: {random.randint(1,6)}")
+    await event.reply(f"🎲 {random.randint(1,6)}")
 
-@bot.on(events.NewMessage(pattern="!عملة"))
+@bot.on(events.NewMessage(pattern="عملة"))
 async def coin_game(event):
-    choice = random.choice(["رأس", "كتابة"])
-    await event.reply(f"🪙 العملة: {choice}")
+    await event.reply(f"🪙 {random.choice(['رأس','كتابة'])}")
 
-# 启動
 bot.run_until_disconnected()
