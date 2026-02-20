@@ -3,10 +3,10 @@ import random
 import datetime
 from telethon import TelegramClient, events
 from telethon.tl.types import ChatBannedRights
-
-# AI مجاني باستخدام HuggingFace GPT2
 from transformers import pipeline
-ai = pipeline("text-generation", model="gpt2")
+
+# AI مجاني وخفيف
+ai = pipeline("text-generation", model="distilgpt2")
 
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
@@ -34,24 +34,15 @@ async def myid(event):
 # ================= كتم =================
 @bot.on(events.NewMessage(pattern="كتم"))
 async def mute_handler(event):
-    if not event.is_group:
-        return
-
     reply = await event.get_reply_message()
     if not reply:
         await event.reply("❌ اعمل Reply على العضو")
-        return
-
-    # منع كتم النفس أو البوت
-    if reply.sender_id == event.sender_id or reply.sender_id == (await bot.get_me()).id:
-        await event.reply("😂 مش ممكن تكتم نفسك أو البوت")
         return
 
     rights = ChatBannedRights(
         until_date=datetime.timedelta(minutes=10),
         send_messages=True
     )
-
     try:
         await bot.edit_permissions(event.chat_id, reply.sender_id, rights)
         await event.reply("🔇 تم كتمه 10 دقايق")
@@ -145,7 +136,11 @@ async def coin_game(event):
 # ================= AI مجاني =================
 @bot.on(events.NewMessage(pattern="^ai "))
 async def ai_reply(event):
-    question = event.raw_text[3:]
+    question = event.raw_text[3:].strip()
+    if "مين المطور بتاعك" in question:
+        await event.reply("المبرمج الشيخ سيف @RyZe0x01")
+        return
+
     try:
         result = ai(question, max_length=50, do_sample=True)
         answer = result[0]['generated_text']
@@ -153,5 +148,10 @@ async def ai_reply(event):
     except Exception as e:
         await event.reply("❌ حصل خطأ في الرد")
         print(e)
+
+# ================= أمر مطور =================
+@bot.on(events.NewMessage(pattern="مطور"))
+async def show_dev(event):
+    await event.reply("الشيخ سيف @RyZe0x01")
 
 bot.run_until_disconnected()
